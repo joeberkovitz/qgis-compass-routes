@@ -210,24 +210,27 @@ class CompassRoutes:
             self.createRouteLayer(self.dlg.variationBox.value())
 
     def createRouteLayer(self, variation):
+        # Create a temporary layer with appropriate symbology and labeling that will
+        # automatically label each line with distance and heading.
+
         units = QgsUnitTypes.DistanceNauticalMiles
         canvasCrs = self.canvas.mapSettings().destinationCrs()
-        fields = QgsFields()
-        # fields.append(QgsField("label", QVariant.String))
-        # fields.append(QgsField("value", QVariant.Double))
-        # fields.append(QgsField("units", QVariant.String))
-        # fields.append(QgsField("heading_to", QVariant.Double))
-        # fields.append(QgsField("heading_from", QVariant.Double))
-        # fields.append(QgsField("total_dist", QVariant.Double))
+        fields = QgsFields()   # there are no fields.
 
         degrees = str(abs(variation)) + 'º' + ('W' if variation < 0 else 'E')
-        layer = QgsVectorLayer("LineString?crs={}".format(canvasCrs.authid()), "Routes " + degrees, "memory")
+        layerName = "Routes (var. " + degrees + ")"
+        layer = QgsVectorLayer("LineString?crs={}".format(canvasCrs.authid()), layerName, "memory")
         dp = layer.dataProvider()
         dp.addAttributes(fields)
         layer.updateFields()
 
+        # Set up the layer with an expression label that does what we want
         label = QgsPalLayerSettings()
-        label.fieldName = "concat(format_number($length,2),' @ ',lpad(format_number((degrees(azimuth(start_point($geometry), end_point($geometry)))+360-@magnetic_var)%360,0),3,'0'),' M')"
+        label.fieldName = (
+            "concat(format_number($length,2),' @ ',"
+            "lpad(format_number("
+            "round(degrees(azimuth(start_point($geometry), end_point($geometry)))+360-@magnetic_var)%360,0),3,'0'),"
+            "' M')")
         try:
             label.placement = QgsPalLayerSettings.Line
         except Exception:
@@ -236,6 +239,7 @@ class CompassRoutes:
         label.isExpression = True
         label.overrunDistance = 1000
 
+        # configure the text, background and symbology to a reasonable default
         format = label.format()
         format.setSizeUnit(QgsUnitTypes.RenderUnit.RenderMillimeters)
         format.setColor(QColor.fromRgb(0))
