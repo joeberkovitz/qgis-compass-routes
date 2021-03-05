@@ -2,3 +2,5 @@ help
 scripts
 test
 zip_build
+pb_tool.cfg
+plugin_upload.py
