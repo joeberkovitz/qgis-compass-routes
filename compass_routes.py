@@ -32,6 +32,9 @@ from qgis.core import (
     QgsArrowSymbolLayer, QgsLineSymbol, QgsSingleSymbolRenderer,
     QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, QgsSettings,QgsExpressionContextUtils)
 
+from . import geomag
+from datetime import *
+
 # Initialize Qt resources from file resources.py
 from .resources import *
 # Import the code for the dialog
@@ -197,28 +200,36 @@ class CompassRoutes:
         if self.first_start == True:
             self.first_start = False
             self.dlg = CompassRoutesDialog()
+            self.dlg.addLayerButton.clicked.connect(self.createRouteLayer)
+            self.dlg.calculateButton.clicked.connect(self.calculateDeclination)
+            self.calculateDeclination()
 
         # show the dialog
         self.dlg.show()
         # Run the dialog event loop
         result = self.dlg.exec_()
-        # See if OK was pressed
-        if result:
-            # Do something useful here - delete the line containing pass and
-            # substitute with your code.
-            self.iface.messageBar().pushMessage('variation: ' + str(self.dlg.variationBox.value()))
-            self.createRouteLayer(self.dlg.variationBox.value())
 
-    def createRouteLayer(self, variation):
+        # do nothing here since either we added the layer, or we got cancelled
+
+    def calculateDeclination(self):
+        xform = QgsCoordinateTransform(self.iface.mapCanvas().mapSettings().destinationCrs(),
+            QgsCoordinateReferenceSystem('EPSG:4326'),
+            QgsProject.instance())
+        center = xform.transform(self.iface.mapCanvas().center())
+        decl = geomag.declination(center.y(), center.x(), 0, date.today())
+        self.dlg.variationBox.setValue(round(decl))
+
+    def createRouteLayer(self):
         # Create a temporary layer with appropriate symbology and labeling that will
         # automatically label each line with distance and heading.
 
+        variation = self.dlg.variationBox.value()
         units = QgsUnitTypes.DistanceNauticalMiles
         canvasCrs = self.canvas.mapSettings().destinationCrs()
         fields = QgsFields()   # there are no fields.
 
         degrees = str(abs(variation)) + 'º' + ('W' if variation < 0 else 'E')
-        layerName = "Routes (var. " + degrees + ")"
+        layerName = self.dlg.layerEdit.text() + " (var. " + degrees + ")"
         layer = QgsVectorLayer("LineString?crs={}".format(canvasCrs.authid()), layerName, "memory")
         dp = layer.dataProvider()
         dp.addAttributes(fields)
@@ -267,4 +278,6 @@ class CompassRoutes:
         QgsExpressionContextUtils.setLayerVariable(layer,'magnetic_var',str(variation))
 
         layer.updateExtents()
-        QgsProject.instance().addMapLayer(layer)    
+        QgsProject.instance().addMapLayer(layer)
+
+        self.dlg.close()  
