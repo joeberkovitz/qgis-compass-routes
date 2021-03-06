@@ -28,12 +28,13 @@ from qgis.PyQt.QtWidgets import QAction
 from qgis.core import (
     Qgis, QgsCoordinateTransform, QgsCoordinateReferenceSystem,
     QgsUnitTypes, QgsWkbTypes, QgsGeometry, QgsFields, QgsField,
-    QgsProject, QgsVectorLayer, QgsFeature, QgsPointXY,
+    QgsProject, QgsVectorLayer, QgsFeature, QgsPoint, QgsPointXY, QgsLineString, QgsDistanceArea,
     QgsArrowSymbolLayer, QgsLineSymbol, QgsSingleSymbolRenderer,
     QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, QgsSettings,QgsExpressionContextUtils)
 
 from . import geomag
 from datetime import *
+import math
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -324,14 +325,40 @@ class CompassRoutes:
         variation = self.magNorthDialog.variationBox.value()
         units = QgsUnitTypes.DistanceNauticalMiles
         canvasCrs = self.canvas.mapSettings().destinationCrs()
+        layerCrs = QgsCoordinateReferenceSystem('EPSG:4326')  # always WGS84 for these grids
         fields = QgsFields()   # there are no fields.
 
         degrees = str(abs(variation)) + 'º' + ('W' if variation < 0 else 'E')
         layerName = self.magNorthDialog.layerEdit.text() + " (var. " + degrees + ")"
-        layer = QgsVectorLayer("LineString?crs={}".format(canvasCrs.authid()), layerName, "memory")
+        layer = QgsVectorLayer("LineString?crs={}".format(layerCrs.authid()), layerName, "memory")
         dp = layer.dataProvider()
         dp.addAttributes(fields)
         layer.updateFields()
+
+        layer.startEditing()
+
+        layer.renderer().symbol().setColor(QColor.fromRgb(0xCC0000))
+
+        xform = QgsCoordinateTransform(canvasCrs, layerCrs, QgsProject.instance())
+        extent = xform.transformBoundingBox(self.canvas.mapSettings().visibleExtent())
+        heightInMeters = extent.height() * 60 * QgsUnitTypes.fromUnitToUnitFactor(QgsUnitTypes.DistanceNauticalMiles, QgsUnitTypes.DistanceMeters)
+
+        line = QgsLineString()
+        qda = QgsDistanceArea()
+        qda.setEllipsoid('WGS84')
+
+        varRadians = 2*math.pi*variation/360
+        start = QgsPointXY(extent.xMinimum(), extent.yMinimum())
+        end = qda.computeSpheroidProject(start, heightInMeters/math.cos(varRadians), varRadians)
+
+        line.addVertex(QgsPoint(start.x(), start.y()))
+        line.addVertex(QgsPoint(end.x(), end.y()))
+
+        feature = QgsFeature()
+        feature.setGeometry(line)
+        layer.addFeature(feature)
+
+        layer.commitChanges()
 
         layer.updateExtents()
         QgsProject.instance().addMapLayer(layer)

@@ -6,7 +6,7 @@
 
 [general]
 name=Compass Routes
-qgisMinimumVersion=3.0
+qgisMinimumVersion=3.2
 description=This plugin creates vector layers that contain or label vector layer features based on a magnetic variation.
 version=0.1
 author=Joe Berkovitz
