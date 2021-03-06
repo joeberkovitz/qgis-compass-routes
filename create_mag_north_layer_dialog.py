@@ -29,13 +29,13 @@ from qgis.PyQt import QtWidgets
 
 # This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
-    os.path.dirname(__file__), 'compass_routes_dialog_base.ui'))
+    os.path.dirname(__file__), 'create_mag_north_layer_dialog_base.ui'))
 
 
-class CompassRoutesDialog(QtWidgets.QDialog, FORM_CLASS):
+class CreateMagNorthLayerDialog(QtWidgets.QDialog, FORM_CLASS):
     def __init__(self, parent=None):
         """Constructor."""
-        super(CompassRoutesDialog, self).__init__(parent)
+        super(CreateMagNorthLayerDialog, self).__init__(parent)
         # Set up the user interface from Designer through FORM_CLASS.
         # After self.setupUi() you can access any designer object by doing
         # self.<objectname>, and you can use autoconnect slots - see

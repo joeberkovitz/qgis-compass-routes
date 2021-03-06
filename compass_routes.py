@@ -38,7 +38,8 @@ from datetime import *
 # Initialize Qt resources from file resources.py
 from .resources import *
 # Import the code for the dialog
-from .compass_routes_dialog import CompassRoutesDialog
+from .create_compass_routes_layer_dialog import CreateCompassRoutesLayerDialog
+from .create_mag_north_layer_dialog import CreateMagNorthLayerDialog
 import os.path
 
 
@@ -77,7 +78,8 @@ class CompassRoutes:
 
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
-        self.first_start = None
+        self.route_needs_init = None
+        self.mag_north_needs_init = None
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -173,14 +175,20 @@ class CompassRoutes:
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
         icon_path = ':/plugins/compass_routes/icon.png'
+
         self.add_action(
             icon_path,
             text=self.tr(u'Create Compass Route Layer'),
-            callback=self.run,
+            callback=self.createRouteLayer,
             parent=self.iface.mainWindow())
+        self.route_needs_init = True
 
-        # will be set False in run()
-        self.first_start = True
+        self.add_action(
+            icon_path,
+            text=self.tr(u'Create Magnetic North Layer'),
+            callback=self.createMagNorthLayer,
+            parent=self.iface.mainWindow())
+        self.mag_north_needs_init = True
 
 
     def unload(self):
@@ -192,44 +200,68 @@ class CompassRoutes:
             self.iface.removeToolBarIcon(action)
 
 
-    def run(self):
+    def createRouteLayer(self):
         """Run method that performs all the real work"""
 
         # Create the dialog with elements (after translation) and keep reference
         # Only create GUI ONCE in callback, so that it will only load when the plugin is started
-        if self.first_start == True:
-            self.first_start = False
-            self.dlg = CompassRoutesDialog()
-            self.dlg.addLayerButton.clicked.connect(self.createRouteLayer)
-            self.dlg.calculateButton.clicked.connect(self.calculateDeclination)
-            self.calculateDeclination()
+        if self.route_needs_init == True:
+            self.route_needs_init = False
+            self.routeDialog = CreateCompassRoutesLayerDialog()
+            self.routeDialog.addLayerButton.clicked.connect(self.doCreateRouteLayer)
+            self.routeDialog.calculateButton.clicked.connect(self.calcRouteDeclination)
+            self.calcRouteDeclination()
 
         # show the dialog
-        self.dlg.show()
+        self.routeDialog.show()
         # Run the dialog event loop
-        result = self.dlg.exec_()
+        result = self.routeDialog.exec_()
 
         # do nothing here since either we added the layer, or we got cancelled
+
+    def calcRouteDeclination(self):
+        self.routeDialog.variationBox.setValue(self.calculateDeclination())
+
+    def createMagNorthLayer(self):
+        """Run method that performs all the real work"""
+
+        # Create the dialog with elements (after translation) and keep reference
+        # Only create GUI ONCE in callback, so that it will only load when the plugin is started
+        if self.mag_north_needs_init == True:
+            self.mag_north_needs_init = False
+            self.magNorthDialog = CreateMagNorthLayerDialog()
+            self.magNorthDialog.addLayerButton.clicked.connect(self.doCreateMagNorthLayer)
+            self.magNorthDialog.calculateButton.clicked.connect(self.calcMagNorthDeclination)
+            self.calcMagNorthDeclination()
+
+        # show the dialog
+        self.magNorthDialog.show()
+        # Run the dialog event loop
+        result = self.magNorthDialog.exec_()
+
+        # do nothing here since either we added the layer, or we got cancelled
+
+    def calcMagNorthDeclination(self):
+        self.magNorthDialog.variationBox.setValue(self.calculateDeclination())
 
     def calculateDeclination(self):
         xform = QgsCoordinateTransform(self.iface.mapCanvas().mapSettings().destinationCrs(),
             QgsCoordinateReferenceSystem('EPSG:4326'),
             QgsProject.instance())
         center = xform.transform(self.iface.mapCanvas().center())
-        decl = geomag.declination(center.y(), center.x(), 0, date.today())
-        self.dlg.variationBox.setValue(round(decl))
+        return round(geomag.declination(center.y(), center.x(), 0, date.today()))
 
-    def createRouteLayer(self):
+    def doCreateRouteLayer(self):
         # Create a temporary layer with appropriate symbology and labeling that will
         # automatically label each line with distance and heading.
 
-        variation = self.dlg.variationBox.value()
+        variation = self.routeDialog.variationBox.value()
         units = QgsUnitTypes.DistanceNauticalMiles
         canvasCrs = self.canvas.mapSettings().destinationCrs()
         fields = QgsFields()   # there are no fields.
 
         degrees = str(abs(variation)) + 'º' + ('W' if variation < 0 else 'E')
-        layerName = self.dlg.layerEdit.text() + " (var. " + degrees + ")"
+        layerName = self.routeDialog.layerEdit.text() + " (var. " + degrees + ")"
         layer = QgsVectorLayer("LineString?crs={}".format(canvasCrs.authid()), layerName, "memory")
         dp = layer.dataProvider()
         dp.addAttributes(fields)
@@ -280,4 +312,25 @@ class CompassRoutes:
         layer.updateExtents()
         QgsProject.instance().addMapLayer(layer)
 
-        self.dlg.close()  
+        self.routeDialog.close()  
+
+    def doCreateMagNorthLayer(self):
+        # Create a temporary layer with appropriate symbology and labeling that will
+        # automatically label each line with distance and heading.
+
+        variation = self.magNorthDialog.variationBox.value()
+        units = QgsUnitTypes.DistanceNauticalMiles
+        canvasCrs = self.canvas.mapSettings().destinationCrs()
+        fields = QgsFields()   # there are no fields.
+
+        degrees = str(abs(variation)) + 'º' + ('W' if variation < 0 else 'E')
+        layerName = self.magNorthDialog.layerEdit.text() + " (var. " + degrees + ")"
+        layer = QgsVectorLayer("LineString?crs={}".format(canvasCrs.authid()), layerName, "memory")
+        dp = layer.dataProvider()
+        dp.addAttributes(fields)
+        layer.updateFields()
+
+        layer.updateExtents()
+        QgsProject.instance().addMapLayer(layer)
+
+        self.magNorthDialog.close()  

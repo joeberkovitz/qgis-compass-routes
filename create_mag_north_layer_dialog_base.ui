@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>CompassRoutesDialogBase</class>
- <widget class="QDialog" name="CompassRoutesDialogBase">
+ <class>CreateMagNorthLayerDialogBase</class>
+ <widget class="QDialog" name="CreateMagNorthLayerDialogBase">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
     <width>397</width>
-    <height>209</height>
+    <height>210</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Create Compass Route Layer</string>
+   <string>Create Magnetic North Grid</string>
   </property>
   <widget class="QLabel" name="label">
    <property name="geometry">
@@ -135,7 +135,7 @@
     </rect>
    </property>
    <property name="text">
-    <string>Routes</string>
+    <string>Magnetic North</string>
    </property>
   </widget>
  </widget>
@@ -144,7 +144,7 @@
   <connection>
    <sender>button_box</sender>
    <signal>accepted()</signal>
-   <receiver>CompassRoutesDialogBase</receiver>
+   <receiver>CreateMagNorthLayerDialogBase</receiver>
    <slot>accept()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -160,7 +160,7 @@
   <connection>
    <sender>button_box</sender>
    <signal>rejected()</signal>
-   <receiver>CompassRoutesDialogBase</receiver>
+   <receiver>CreateMagNorthLayerDialogBase</receiver>
    <slot>reject()</slot>
    <hints>
     <hint type="sourcelabel">
