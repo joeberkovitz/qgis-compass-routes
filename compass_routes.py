@@ -210,7 +210,9 @@ class CompassRoutes:
             self.routeDialog = CreateCompassRoutesLayerDialog()
             self.routeDialog.addLayerButton.clicked.connect(self.doCreateRouteLayer)
             self.routeDialog.calculateButton.clicked.connect(self.calcRouteDeclination)
-            self.calcRouteDeclination()
+
+        # always default declination on startup
+        self.calcRouteDeclination()
 
         # show the dialog
         self.routeDialog.show()
@@ -232,7 +234,9 @@ class CompassRoutes:
             self.magNorthDialog = CreateMagNorthLayerDialog()
             self.magNorthDialog.addLayerButton.clicked.connect(self.doCreateMagNorthLayer)
             self.magNorthDialog.calculateButton.clicked.connect(self.calcMagNorthDeclination)
-            self.calcMagNorthDeclination()
+
+        # always default declination on startup
+        self.calcMagNorthDeclination()
 
         # show the dialog
         self.magNorthDialog.show()
@@ -256,7 +260,6 @@ class CompassRoutes:
         # automatically label each line with distance and heading.
 
         variation = self.routeDialog.variationBox.value()
-        units = QgsUnitTypes.DistanceNauticalMiles
         canvasCrs = self.canvas.mapSettings().destinationCrs()
         fields = QgsFields()   # there are no fields.
 
