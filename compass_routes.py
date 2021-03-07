@@ -256,6 +256,10 @@ class CompassRoutes:
         center = xform.transform(self.iface.mapCanvas().center())
         return round(geomag.declination(center.y(), center.x(), 0, date.today()))
 
+    def makeLayerName(self, name, variation):
+        degrees = str(abs(variation)) + 'º' + ('W' if variation < 0 else 'E')
+        return name + " (var. " + degrees + ")"
+
     def doCreateRouteLayer(self):
         # Create a temporary layer with appropriate symbology and labeling that will
         # automatically label each line with distance and heading.
@@ -264,8 +268,7 @@ class CompassRoutes:
         canvasCrs = self.canvas.mapSettings().destinationCrs()
         fields = QgsFields()   # there are no fields.
 
-        degrees = str(abs(variation)) + 'º' + ('W' if variation < 0 else 'E')
-        layerName = self.routeDialog.layerEdit.text() + " (var. " + degrees + ")"
+        layerName = self.makeLayerName(self.routeDialog.layerEdit.text(), variation)
         layer = QgsVectorLayer("LineString?crs={}".format(canvasCrs.authid()), layerName, "memory")
         dp = layer.dataProvider()
         dp.addAttributes(fields)
@@ -328,8 +331,7 @@ class CompassRoutes:
         layerCrs = QgsCoordinateReferenceSystem('EPSG:4326')  # always WGS84 for these grids
         fields = QgsFields()   # there are no fields.
 
-        degrees = str(abs(variation)) + 'º' + ('W' if variation < 0 else 'E')
-        layerName = self.magNorthDialog.layerEdit.text() + " (var. " + degrees + ")"
+        layerName = self.makeLayerName(self.magNorthDialog.layerEdit.text(), variation)
         layer = QgsVectorLayer("LineString?crs={}".format(layerCrs.authid()), layerName, "memory")
         dp = layer.dataProvider()
         dp.addAttributes(fields)
@@ -341,22 +343,29 @@ class CompassRoutes:
 
         xform = QgsCoordinateTransform(canvasCrs, layerCrs, QgsProject.instance())
         extent = xform.transformBoundingBox(self.canvas.mapSettings().visibleExtent())
-        heightInMeters = extent.height() * 60 * QgsUnitTypes.fromUnitToUnitFactor(QgsUnitTypes.DistanceNauticalMiles, QgsUnitTypes.DistanceMeters)
+        nmToMeters = QgsUnitTypes.fromUnitToUnitFactor(QgsUnitTypes.DistanceNauticalMiles, QgsUnitTypes.DistanceMeters)
+        heightInMeters = extent.height() * 60 * nmToMeters
 
-        line = QgsLineString()
         qda = QgsDistanceArea()
         qda.setEllipsoid('WGS84')
 
-        varRadians = 2*math.pi*variation/360
+        varRadians = math.radians(variation)
         start = QgsPointXY(extent.xMinimum(), extent.yMinimum())
         end = qda.computeSpheroidProject(start, heightInMeters/math.cos(varRadians), varRadians)
+        if end.x() > start.x():
+            start.setX(end.x())
+            end = qda.computeSpheroidProject(start, heightInMeters/math.cos(varRadians), varRadians)
 
-        line.addVertex(QgsPoint(start.x(), start.y()))
-        line.addVertex(QgsPoint(end.x(), end.y()))
+        while start.x() < extent.xMaximum() or end.x() < extent.xMaximum():
+            line = QgsLineString()
+            line.addVertex(QgsPoint(start.x(), start.y()))
+            line.addVertex(QgsPoint(end.x(), end.y()))
+            feature = QgsFeature()
+            feature.setGeometry(line)
+            layer.addFeature(feature)
 
-        feature = QgsFeature()
-        feature.setGeometry(line)
-        layer.addFeature(feature)
+            start = qda.computeSpheroidProject(start, nmToMeters/math.cos(varRadians), math.radians(90))
+            end = qda.computeSpheroidProject(start, heightInMeters/math.cos(varRadians), varRadians)
 
         layer.commitChanges()
 
