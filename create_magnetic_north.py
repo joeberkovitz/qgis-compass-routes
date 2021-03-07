@@ -33,7 +33,7 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
     PrmUnitsOfMeasure = 'UnitsOfMeasure'
     PrmLineDistance = 'LineDistance'
     PrmTraceInterval = 'TraceInterval'
-    PrmDistanceTolerance = 'DistanceTolerance'
+    PrmRecalibrationInterval = 'RecalibrationInterval'
 
     def initAlgorithm(self, config):
         self.addParameter(
@@ -68,10 +68,10 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
         )
         self.addParameter(
             QgsProcessingParameterNumber(
-                self.PrmDistanceTolerance,
-                tr('Line distance tolerance'),
+                self.PrmRecalibrationInterval,
+                tr('Line recalibration interval'),
                 QgsProcessingParameterNumber.Double,
-                defaultValue=0.5,
+                defaultValue=60,
                 optional=True)
         )
         self.addParameter(
@@ -85,14 +85,14 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
         extent = self.parameterAsExtent(parameters, self.PrmExtent, context, epsg4326)
         lineDistance = self.parameterAsDouble(parameters, self.PrmLineDistance, context)
         traceInterval = self.parameterAsDouble(parameters, self.PrmTraceInterval, context)
-        distanceTolerance = self.parameterAsDouble(parameters, self.PrmDistanceTolerance, context)
+        recalibrationInterval = self.parameterAsDouble(parameters, self.PrmRecalibrationInterval, context)
         units = self.parameterAsInt(parameters, self.PrmUnitsOfMeasure, context)
         measureFactor = conversionToMeters(units)
 
         # adjust linear units
         lineDistance *= measureFactor
         traceInterval *= measureFactor
-        distanceTolerance *= measureFactor
+        recalibrationInterval *= measureFactor
 
         (sink, dest_id) = self.parameterAsSink(
             parameters, self.PrmOutputLayer, context, QgsFields(),
@@ -118,38 +118,81 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
 
         feedback.pushDebugInfo('start=' + str(start) + ', traceAngle=' + str(traceAngle))
 
-        # Our major loop begins with a check that the start point has not gone past the E of the extent
-        prevLine = None
+        lastStartPoints = []
+        recalibrationSize = round(recalibrationInterval / traceInterval)
 
+        # Our major (longitude) loop starts here
         while True:
+
             # Initialize our line at the start
-            line = []
-            line.append(start)
-
-            # Now we will trace the line until we are out of the rectangle's Y range
+            line = [start]
+            startPoints = [start]
             p1 = start
+            startStepX = -1
+
+            # Now we will trace the line in the field direction until we are out of the rectangle's Y range,
+            # restarting a new line whenever the horizontal step gets out of whack due to latitude change.
+
             while True:
+                # get the variation at this point
                 variation = geomag.declination(p1.y(), p1.x(), 0, date.today())
+
+                # Determine the longitude step that we will be taking at this latitude. This
+                # can vary longitudinally because it's compensated for the magnetic variation.
+                nextStep = qda.computeSpheroidProject(p1, lineDistance / math.cos(math.radians(variation)), math.radians(90))
+                stepX = nextStep.x() - p1.x()
+                if startStepX < 0:
+                    startStepX = stepX
+
                 p2 = qda.computeSpheroidProject(p1, traceInterval, math.radians(variation + traceAngle))
-
-                feedback.pushDebugInfo('p1=' + str(p1) + ', p2=' + str(p2))
-
                 if p2.y() < extent.yMinimum() or p2.y() > extent.yMaximum():
-                    # Here we should be clipping to the extent edge
+                    # Here we should be clipping the last segment to the extent edge
                     break
 
                 line.append(p2)
+                startPoints.append(p2)
                 p1 = p2
 
-            feature = QgsFeature()
-            feature.setGeometry(QgsGeometry.fromPolylineXY(line))
-            sink.addFeature(feature)
+                # start a new, longitudinally adjusted line if we have strayed too far
+                if len(line) >= recalibrationSize:
+                    feature = QgsFeature()
+                    feature.setGeometry(QgsGeometry.fromPolylineXY(line))
+                    sink.addFeature(feature)
+                    if len(lastStartPoints) >= len(startPoints) + 1:
+                        lastStartPoint = lastStartPoints[len(startPoints)]
+
+                        # This is a hack that simply finds a point orthogonal to the previous trace in the proper
+                        # direction, then backtracks along the new trace line a rigid distance. It produces the
+                        # proper line spacing in the recalibrated line but has other undesirable effects.
+                        p1Adj = qda.computeSpheroidProject(lastStartPoint, lineDistance, math.radians(variation+90))
+                        p1Adj = qda.computeSpheroidProject(p1Adj, traceInterval * 2, math.radians(variation + traceAngle + 180))
+
+                        # === This formula doesn't work because it assumes that X and Y distance units are equal
+                        #
+                        #p1Adj = QgsPointXY(lastStartPoint.x() + stepX, lastStartPoint.y())
+                        # This point needs to be adjusted to match the latitude of the previous point              
+                        # dy = p1.y() - p1Adj.y()
+                        # p1 = QgsPointXY(p1Adj.x() + (dy * math.sin(math.radians(variation + traceAngle))), p1.y())
+                        p1 = p1Adj
+
+                    line = [p1]
+
+            # end field tracing loop
+
+            if len(line) >= 2:
+                feature = QgsFeature()
+                feature.setGeometry(QgsGeometry.fromPolylineXY(line))
+                sink.addFeature(feature)
 
             if p2.x() > extent.xMaximum():
                 break
 
             # now advance the start point to the east, correcting for the variation angle
-            start = qda.computeSpheroidProject(start, lineDistance / math.cos(math.radians(centerVar)), math.radians(90))
+            start.setX(start.x() + startStepX)
+            startStepX = -1
+            lastStartPoints = startPoints
+
+        # end longitude loop
 
         # variation = geomag.declination(extent.center().y(), extent.center().x(), 0, date.today())
         # varRadians = math.radians(variation)
