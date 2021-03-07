@@ -4,7 +4,7 @@ from datetime import *
 
 from qgis.core import (
     QgsPointXY, QgsPoint, QgsFeature, QgsGeometry, QgsField, QgsFields,
-    QgsProject, QgsWkbTypes, QgsCoordinateTransform,
+    QgsProject, QgsUnitTypes, QgsWkbTypes, QgsCoordinateTransform,
     QgsLineString, QgsDistanceArea)
 
 from qgis.core import (
@@ -25,12 +25,14 @@ from qgis.PyQt.QtCore import QVariant, QUrl
 from .utils import tr, conversionToMeters, DISTANCE_LABELS, epsg4326
 from . import geomag
 
+nmToMeters = QgsUnitTypes.fromUnitToUnitFactor(QgsUnitTypes.DistanceNauticalMiles, QgsUnitTypes.DistanceMeters)
+
 class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
     PrmOutputLayer = 'OutputLayer'
     PrmExtent = 'Extent'
     PrmUnitsOfMeasure = 'UnitsOfMeasure'
     PrmLineDistance = 'LineDistance'
-    PrmBearingTolerance = 'BearingTolerance'
+    PrmTraceInterval = 'TraceInterval'
     PrmDistanceTolerance = 'DistanceTolerance'
 
     def initAlgorithm(self, config):
@@ -58,10 +60,10 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
         )
         self.addParameter(
             QgsProcessingParameterNumber(
-                self.PrmBearingTolerance,
-                tr('Variation tolerance'),
+                self.PrmTraceInterval,
+                tr('Field trace interval'),
                 QgsProcessingParameterNumber.Double,
-                defaultValue=0.5,
+                defaultValue=1.0,
                 optional=True)
         )
         self.addParameter(
@@ -82,46 +84,80 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
     def processAlgorithm(self, parameters, context, feedback):
         extent = self.parameterAsExtent(parameters, self.PrmExtent, context, epsg4326)
         lineDistance = self.parameterAsDouble(parameters, self.PrmLineDistance, context)
-        bearingTolerance = self.parameterAsDouble(parameters, self.PrmBearingTolerance, context)
+        traceInterval = self.parameterAsDouble(parameters, self.PrmTraceInterval, context)
         distanceTolerance = self.parameterAsDouble(parameters, self.PrmDistanceTolerance, context)
         units = self.parameterAsInt(parameters, self.PrmUnitsOfMeasure, context)
         measureFactor = conversionToMeters(units)
 
         # adjust linear units
         lineDistance *= measureFactor
+        traceInterval *= measureFactor
         distanceTolerance *= measureFactor
 
         (sink, dest_id) = self.parameterAsSink(
             parameters, self.PrmOutputLayer, context, QgsFields(),
             QgsWkbTypes.LineString, epsg4326)
 
-        # sink.renderer().symbol().setColor(QColor.fromRgb(0xCC0000))
-        # sink.renderer().symbol().setWidth(0.25)
-        heightInMeters = extent.height() * 60 * 1852
+
+        heightInMeters = extent.height() * 60 * nmToMeters
 
         qda = QgsDistanceArea()
         qda.setEllipsoid('WGS84')
 
-        variation = geomag.declination(extent.center().y(), extent.center().x(), 0, date.today())
-        varRadians = math.radians(variation)
-        start = QgsPointXY(extent.xMinimum(), extent.yMinimum())
-        end = qda.computeSpheroidProject(start, heightInMeters/math.cos(varRadians), varRadians)
-        if end.x() > start.x():
-            start.setX(end.x())
-            end = qda.computeSpheroidProject(start, heightInMeters/math.cos(varRadians), varRadians)
+        # Determine an initial origin and direction in which to trace field lines, either the NW (or SW)
+        # of the extent based on sign of the variation in the extent's center. This roughly ensures that a
+        # field line to magnetic S (or N) from this origin will be the westernmost line visible in the extent.
 
-        feedback.pushDebugInfo('extent:' + str(extent) + ', start:' + str(start))
-        while start.x() < extent.xMaximum() or end.x() < extent.xMaximum():
-            line = QgsLineString()
-            line.addVertex(QgsPoint(start.x(), start.y()))
-            line.addVertex(QgsPoint(end.x(), end.y()))
+        centerVar = geomag.declination(extent.center().y(), extent.center().x(), 0, date.today())
+        if centerVar < 0:
+            start = QgsPointXY(extent.xMinimum(), extent.yMinimum())
+            traceAngle = 0 # trace towards mag N
+        else:
+            start = QgsPointXY(extent.xMinimum(), extent.yMaximum())
+            traceAngle = 180 # trace towards mag S
+
+        feedback.pushDebugInfo('start=' + str(start) + ', traceAngle=' + str(traceAngle))
+
+        # Our major loop begins with a check that the start point has not gone past the E of the extent
+        prevLine = None
+
+        while True:
+            # Initialize our line at the start
+            line = []
+            line.append(start)
+
+            # Now we will trace the line until we are out of the rectangle's Y range
+            p1 = start
+            while True:
+                variation = geomag.declination(p1.y(), p1.x(), 0, date.today())
+                p2 = qda.computeSpheroidProject(p1, traceInterval, math.radians(variation + traceAngle))
+
+                feedback.pushDebugInfo('p1=' + str(p1) + ', p2=' + str(p2))
+
+                if p2.y() < extent.yMinimum() or p2.y() > extent.yMaximum():
+                    # Here we should be clipping to the extent edge
+                    break
+
+                line.append(p2)
+                p1 = p2
+
             feature = QgsFeature()
-            feature.setGeometry(line)
+            feature.setGeometry(QgsGeometry.fromPolylineXY(line))
             sink.addFeature(feature)
 
-            start = qda.computeSpheroidProject(start, lineDistance / math.cos(varRadians), math.radians(90))
-            end = qda.computeSpheroidProject(start, heightInMeters/math.cos(varRadians), varRadians)
-            feedback.pushDebugInfo('..extent:' + str(extent) + ', start:' + str(start))
+            if p2.x() > extent.xMaximum():
+                break
+
+            # now advance the start point to the east, correcting for the variation angle
+            start = qda.computeSpheroidProject(start, lineDistance / math.cos(math.radians(centerVar)), math.radians(90))
+
+        # variation = geomag.declination(extent.center().y(), extent.center().x(), 0, date.today())
+        # varRadians = math.radians(variation)
+        # start = QgsPointXY(extent.xMinimum(), extent.yMinimum())
+        # end = qda.computeSpheroidProject(start, heightInMeters/math.cos(varRadians), varRadians)
+        # if end.x() > start.x():
+        #     start.setX(end.x())
+        #     end = qda.computeSpheroidProject(start, heightInMeters/math.cos(varRadians), varRadians)
 
         return {self.PrmOutputLayer: dest_id}
 
