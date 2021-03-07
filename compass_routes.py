@@ -26,7 +26,7 @@ from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWidgets import QAction
 
 from qgis.core import (
-    Qgis, QgsCoordinateTransform, QgsCoordinateReferenceSystem,
+    Qgis, QgsApplication, QgsCoordinateTransform, QgsCoordinateReferenceSystem,
     QgsUnitTypes, QgsWkbTypes, QgsGeometry, QgsFields, QgsField,
     QgsProject, QgsVectorLayer, QgsFeature, QgsPoint, QgsPointXY, QgsLineString, QgsDistanceArea,
     QgsArrowSymbolLayer, QgsLineSymbol, QgsSingleSymbolRenderer,
@@ -38,10 +38,14 @@ import math
 
 # Initialize Qt resources from file resources.py
 from .resources import *
+from .utils import tr
+
 # Import the code for the dialog
 from .create_compass_routes_layer_dialog import CreateCompassRoutesLayerDialog
-from .create_mag_north_layer_dialog import CreateMagNorthLayerDialog
+from.compass_routes_provider import CompassRoutesProvider
+
 import os.path
+import processing
 
 
 class CompassRoutes:
@@ -59,8 +63,11 @@ class CompassRoutes:
         self.iface = iface
         self.canvas = iface.mapCanvas()
 
+        self.provider = CompassRoutesProvider()
+
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
+
         # initialize locale
         locale = QSettings().value('locale/userLocale')[0:2]
         locale_path = os.path.join(
@@ -69,34 +76,19 @@ class CompassRoutes:
             'CompassRoutes_{}.qm'.format(locale))
 
         if os.path.exists(locale_path):
-            self.translator = QTranslator()
-            self.translator.load(locale_path)
-            QCoreApplication.installTranslator(self.translator)
+            translator = QTranslator()
+            translator.load(locale_path)
+            QCoreApplication.installTranslator(translator)
 
         # Declare instance attributes
         self.actions = []
-        self.menu = self.tr(u'&Compass Routes')
+        self.menu = tr(u'&Compass Routes')
 
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
         self.route_needs_init = None
-        self.mag_north_needs_init = None
 
-    # noinspection PyMethodMayBeStatic
-    def tr(self, message):
-        """Get the translation for a string using Qt translation API.
-
-        We implement this ourselves since we do not inherit QObject.
-
-        :param message: String for translation.
-        :type message: str, QString
-
-        :returns: Translated version of message.
-        :rtype: QString
-        """
-        # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
-        return QCoreApplication.translate('CompassRoutes', message)
-
+        QgsApplication.processingRegistry().addProvider(self.provider)
 
     def add_action(
         self,
@@ -179,14 +171,14 @@ class CompassRoutes:
 
         self.add_action(
             icon_path,
-            text=self.tr(u'Create Compass Route Layer'),
+            text=tr(u'Create Compass Route Layer'),
             callback=self.createRouteLayer,
             parent=self.iface.mainWindow())
         self.route_needs_init = True
 
         self.add_action(
             icon_path,
-            text=self.tr(u'Create Magnetic North Layer'),
+            text=tr(u'Create Magnetic North Layer'),
             callback=self.createMagNorthLayer,
             parent=self.iface.mainWindow())
         self.mag_north_needs_init = True
@@ -196,10 +188,11 @@ class CompassRoutes:
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
             self.iface.removePluginMenu(
-                self.tr(u'&Compass Routes'),
+                tr(u'&Compass Routes'),
                 action)
             self.iface.removeToolBarIcon(action)
 
+        QgsApplication.processingRegistry().removeProvider(self.provider)
 
     def createRouteLayer(self):
         """Run method that performs all the real work"""
@@ -222,32 +215,11 @@ class CompassRoutes:
 
         # do nothing here since either we added the layer, or we got cancelled
 
+    def createMagNorthLayer(self):
+        processing.execAlgorithmDialog('compassroutes:createmagneticnorth', {})
+
     def calcRouteDeclination(self):
         self.routeDialog.variationBox.setValue(self.calculateDeclination())
-
-    def createMagNorthLayer(self):
-        """Run method that performs all the real work"""
-
-        # Create the dialog with elements (after translation) and keep reference
-        # Only create GUI ONCE in callback, so that it will only load when the plugin is started
-        if self.mag_north_needs_init == True:
-            self.mag_north_needs_init = False
-            self.magNorthDialog = CreateMagNorthLayerDialog()
-            self.magNorthDialog.addLayerButton.clicked.connect(self.doCreateMagNorthLayer)
-            self.magNorthDialog.calculateButton.clicked.connect(self.calcMagNorthDeclination)
-
-        # always default declination on startup
-        self.calcMagNorthDeclination()
-
-        # show the dialog
-        self.magNorthDialog.show()
-        # Run the dialog event loop
-        result = self.magNorthDialog.exec_()
-
-        # do nothing here since either we added the layer, or we got cancelled
-
-    def calcMagNorthDeclination(self):
-        self.magNorthDialog.variationBox.setValue(self.calculateDeclination())
 
     def calculateDeclination(self):
         xform = QgsCoordinateTransform(self.iface.mapCanvas().mapSettings().destinationCrs(),
@@ -321,55 +293,3 @@ class CompassRoutes:
 
         self.routeDialog.close()  
 
-    def doCreateMagNorthLayer(self):
-        # Create a temporary layer with appropriate symbology and labeling that will
-        # automatically label each line with distance and heading.
-
-        variation = self.magNorthDialog.variationBox.value()
-        units = QgsUnitTypes.DistanceNauticalMiles
-        canvasCrs = self.canvas.mapSettings().destinationCrs()
-        layerCrs = QgsCoordinateReferenceSystem('EPSG:4326')  # always WGS84 for these grids
-        fields = QgsFields()   # there are no fields.
-
-        layerName = self.makeLayerName(self.magNorthDialog.layerEdit.text(), variation)
-        layer = QgsVectorLayer("LineString?crs={}".format(layerCrs.authid()), layerName, "memory")
-        dp = layer.dataProvider()
-        dp.addAttributes(fields)
-        layer.updateFields()
-
-        layer.startEditing()
-
-        layer.renderer().symbol().setColor(QColor.fromRgb(0xCC0000))
-
-        xform = QgsCoordinateTransform(canvasCrs, layerCrs, QgsProject.instance())
-        extent = xform.transformBoundingBox(self.canvas.mapSettings().visibleExtent())
-        nmToMeters = QgsUnitTypes.fromUnitToUnitFactor(QgsUnitTypes.DistanceNauticalMiles, QgsUnitTypes.DistanceMeters)
-        heightInMeters = extent.height() * 60 * nmToMeters
-
-        qda = QgsDistanceArea()
-        qda.setEllipsoid('WGS84')
-
-        varRadians = math.radians(variation)
-        start = QgsPointXY(extent.xMinimum(), extent.yMinimum())
-        end = qda.computeSpheroidProject(start, heightInMeters/math.cos(varRadians), varRadians)
-        if end.x() > start.x():
-            start.setX(end.x())
-            end = qda.computeSpheroidProject(start, heightInMeters/math.cos(varRadians), varRadians)
-
-        while start.x() < extent.xMaximum() or end.x() < extent.xMaximum():
-            line = QgsLineString()
-            line.addVertex(QgsPoint(start.x(), start.y()))
-            line.addVertex(QgsPoint(end.x(), end.y()))
-            feature = QgsFeature()
-            feature.setGeometry(line)
-            layer.addFeature(feature)
-
-            start = qda.computeSpheroidProject(start, nmToMeters/math.cos(varRadians), math.radians(90))
-            end = qda.computeSpheroidProject(start, heightInMeters/math.cos(varRadians), varRadians)
-
-        layer.commitChanges()
-
-        layer.updateExtents()
-        QgsProject.instance().addMapLayer(layer)
-
-        self.magNorthDialog.close()  
