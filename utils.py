@@ -1,5 +1,5 @@
 import math
-from qgis.core import QgsUnitTypes, QgsPointXY, QgsCoordinateReferenceSystem
+from qgis.core import QgsUnitTypes, QgsPointXY, QgsCoordinateReferenceSystem, QgsDistanceArea
 from qgis.PyQt.QtCore import QCoreApplication
 
 def tr(string):
@@ -27,3 +27,19 @@ def conversionToMeters(units):
     return measureFactor
 
 epsg4326 = QgsCoordinateReferenceSystem("EPSG:4326")
+
+nmToMeters = QgsUnitTypes.fromUnitToUnitFactor(QgsUnitTypes.DistanceNauticalMiles, QgsUnitTypes.DistanceMeters)
+degToMeters = nmToMeters * 60
+metersToDeg = 1 / degToMeters
+
+def addPoints(a, b):
+    return QgsPointXY(a.x() + b.x(), a.y() + b.y())
+
+def diffPoints(a, b):
+    return QgsPointXY(a.x() - b.x(), a.y() - b.y())
+
+def projectBearing(p, distance, bearing):
+    r = math.radians(bearing)
+    d = distance * metersToDeg
+    n = QgsPointXY(d * math.sin(r) / math.cos(math.radians(p.y())), d * math.cos(r))
+    return n
