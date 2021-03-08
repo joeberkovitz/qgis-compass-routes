@@ -33,6 +33,7 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
     PrmTraceInterval = 'TraceInterval'
     PrmDistanceTolerance = 'DistanceTolerance'
 
+    # Set up this algorithm
     def initAlgorithm(self, config):
         self.addParameter(
             QgsProcessingParameterExtent(
@@ -51,7 +52,7 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterNumber(
                 self.PrmLineDistance,
-                tr('Distance between lines'),
+                tr('Distance between adjacent lines'),
                 QgsProcessingParameterNumber.Double,
                 defaultValue=1.0,
                 optional=False)
@@ -59,7 +60,7 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterNumber(
                 self.PrmTraceInterval,
-                tr('Field trace interval'),
+                tr('Tracing resolution of field lines'),
                 QgsProcessingParameterNumber.Double,
                 defaultValue=5.0,
                 optional=False)
@@ -67,7 +68,7 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterNumber(
                 self.PrmDistanceTolerance,
-                tr('Line distance tolerance (zero means disregard)'),
+                tr('Maximum error in distance between lines (zero=disregard)'),
                 QgsProcessingParameterNumber.Double,
                 defaultValue=0.05,
                 optional=False)
@@ -80,6 +81,7 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
         self.feedback = QgsProcessingFeedback()
 
     def processAlgorithm(self, parameters, context, feedback):
+        # gather parameters
         extent = self.parameterAsExtent(parameters, self.PrmExtent, context, epsg4326)
         lineDistance = self.parameterAsDouble(parameters, self.PrmLineDistance, context)
         traceInterval = self.parameterAsDouble(parameters, self.PrmTraceInterval, context)
@@ -92,28 +94,29 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
         traceInterval *= measureFactor
         distanceTolerance *= measureFactor
 
+        # obtain our output sink
         (sink, dest_id) = self.parameterAsSink(
             parameters, self.PrmOutputLayer, context, QgsFields(),
             QgsWkbTypes.LineString, epsg4326)
 
 
-        heightInMeters = extent.height() * degToMeters # works since it's latitude
-
         # Determine the longitude step direction based on sign of the variation in the extent's center,
-        # so that we start at a place where we will fill in partial lines at the corner.
-
+        # so that we start on the side of the extent such that we will fill in partial lines at the corner.
+        # TODO: this is not ideal when the extent intersects an agonic line.
         centerVar = geomag.declination(extent.center().y(), extent.center().x(), 0, date.today())
         start = QgsPointXY(extent.xMinimum(), extent.yMinimum())
         if centerVar > 0:
             lineDistance = -lineDistance
             start.setX(extent.xMaximum())
 
-        lastStartPoints = []
+        # We trace between points at a fixed longitude interval, so that the distance-preservation logic below
+        # is straightforward and we can compare points in successive traces easily.
         traceIntervalDeg = traceInterval * metersToDeg
         numTraces = math.ceil(extent.height() / traceIntervalDeg)
         traceY = extent.height() / numTraces
 
         lineCount = 0
+        lastStartPoints = []
 
         # Our major (longitude) loop starts here
         while True:
@@ -121,6 +124,8 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
             empty = True
             line = []
             startPoints = []
+
+            # Add the first point
             p1 = start
             if p1.x() >= extent.xMinimum() and p1.x() <= extent.xMaximum():
                 line.append(p1)
@@ -136,12 +141,10 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
                 variation = geomag.declination(p1.y(), p1.x(), 0, date.today())
 
                 # determine a 1-meter vector in the direction of magnetic north
+                # and scale this to find a vector taking us from p1 to the next latitude step
                 magN = projectBearing(p1, 1, variation)
-
-                # Scale this to find a vector taking us from p1 to the desired latitude
-                d = QgsPointXY(magN)
-                d.multiply((y - p1.y()) / d.y())  # note that d.y() will be nonzero for reasonable variations
-                p2 = addPoints(p1, d)
+                magN.multiply((y - p1.y()) / magN.y())  # note that Y magnitude will be nonzero for reasonable variations
+                p2 = addPoints(p1, magN)
 
                 if p2.x() >= extent.xMinimum() and p2.x() <= extent.xMaximum():
                     line.append(p2)
@@ -150,16 +153,16 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
                 # start a new, longitudinally adjusted line if distance exceeds tolerance
                 if distanceTolerance > 0 and len(lastStartPoints) > t:
                     lastP2 = lastStartPoints[t]
-                    eastUnitP2 = projectBearing(lastP2, 1, 90)
-                    correction = eastUnitP2.x() / math.cos(math.radians(variation))
-                    if abs(p2.x() - lastP2.x() - (lineDistance * correction)) > distanceTolerance * correction:
+                    (factor, nextX) = self.adjustLongForVariation(lastP2, lineDistance, variation)
+                    if abs(p2.x() - nextX) > distanceTolerance * factor:
+                        # Flush any line that is in progress
                         if len(line) >= 2:
                             feature = QgsFeature()
                             feature.setGeometry(QgsGeometry.fromPolylineXY(line))
                             sink.addFeature(feature)
 
-                        p2 = QgsPointXY(p2) # make a copy since it was appended to the prior line
-                        p2.setX(lastP2.x() + (lineDistance * correction))
+                        # Now start a new line, properly spaced from the previous trace
+                        p2 = QgsPointXY(nextX, p2.y())
                         line = []
                         if p2.x() >= extent.xMinimum() and p2.x() <= extent.xMaximum():
                             line.append(p2)
@@ -170,22 +173,23 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
 
             # end field tracing loop
 
+            # Flush any accumulated points to a polyline
             if len(line) >= 2:
                 feature = QgsFeature()
                 feature.setGeometry(QgsGeometry.fromPolylineXY(line))
                 sink.addFeature(feature)
 
-            # now advance the start point to the east, correcting for the variation angle
-            variation = geomag.declination(start.y(), start.x(), 0, date.today())
-            start = addPoints(start, projectBearing(start, lineDistance, variation + 90))
-            magN = projectBearing(start, 1, variation)
-            magN.multiply((extent.yMinimum() - start.y()) / magN.y())
-            start = addPoints(start, magN)
-
+            # If we did not manage to find any points inside the extent on this trace, we're done
             if empty:
                 break
 
+            # hold onto our point list for spacing check on the next trace
             lastStartPoints = startPoints
+
+            # now advance the start point to the east, correcting for the variation angle
+            variation = geomag.declination(start.y(), start.x(), 0, date.today())
+            (factor, nextX) = self.adjustLongForVariation(start, lineDistance, variation)
+            start.setX(nextX)
 
             lineCount += 1
             if lineCount % 10 == 0:
@@ -193,15 +197,14 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
 
         # end longitude loop
 
-        # variation = geomag.declination(extent.center().y(), extent.center().x(), 0, date.today())
-        # varRadians = math.radians(variation)
-        # start = QgsPointXY(extent.xMinimum(), extent.yMinimum())
-        # end = wgs84.computeSpheroidProject(start, heightInMeters/math.cos(varRadians), varRadians)
-        # if end.x() > start.x():
-        #     start.setX(end.x())
-        #     end = wgs84.computeSpheroidProject(start, heightInMeters/math.cos(varRadians), varRadians)
-
         return {self.PrmOutputLayer: dest_id}
+
+    # Compute a factor converting longitudinal distance into degrees at a given point's latitude
+    # and also give an adjusted X coordinate moving the point a given distance.
+    def adjustLongForVariation(self, p, distance, variation):
+        east = projectBearing(p, 1, 90)
+        factor = east.x() / math.cos(math.radians(variation))
+        return (factor, p.x() + (distance * factor))
 
     def name(self):
         return 'createmagneticnorth'

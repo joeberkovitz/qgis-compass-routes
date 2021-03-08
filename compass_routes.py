@@ -178,7 +178,7 @@ class CompassRoutes:
 
         self.add_action(
             icon_path,
-            text=tr(u'Create Magnetic North Layer'),
+            text=tr(u'Create Magnetic North Lines'),
             callback=self.createMagNorthLayer,
             parent=self.iface.mainWindow())
         self.mag_north_needs_init = True

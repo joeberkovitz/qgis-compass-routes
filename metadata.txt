@@ -7,12 +7,13 @@
 [general]
 name=Compass Routes
 qgisMinimumVersion=3.2
-description=This plugin creates vector layers that contain or label vector layer features based on a magnetic variation.
+description=This plugin creates vector layers that work with magnetic variation.
 version=0.1
 author=Joe Berkovitz
 email=joseph.berkovitz@gmail.com
 about=Commands in this plugin are available under Plugins > Compass Routes:
     "Create Compass Route Layer": adds a new Line layer with memory storage rendering as arrows that are automatically labeled with distance and magnetic heading. The variation for the layer is chosen before creating the dialog, and can be defaulted from the center of the map canvas. The `magnetic_var` layer property stores the variation used for the layer.
+    "Create Magnetic North Lines": processing script that adds a vector layer containing magnetic north lines within a given extent. Lines are spaced by a given distance and are broken and redrawn to preserve this spacing within an error tolerance.
 
 tracker=https://github.com/joeberkovitz/qgis-compass-routes/issues
 repository=https://github.com/joeberkovitz/qgis-compass-routes

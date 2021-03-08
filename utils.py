@@ -32,12 +32,17 @@ nmToMeters = QgsUnitTypes.fromUnitToUnitFactor(QgsUnitTypes.DistanceNauticalMile
 degToMeters = nmToMeters * 60
 metersToDeg = 1 / degToMeters
 
+# vector addition of two XY points
 def addPoints(a, b):
     return QgsPointXY(a.x() + b.x(), a.y() + b.y())
 
+# vector difference of two XY points
 def diffPoints(a, b):
     return QgsPointXY(a.x() - b.x(), a.y() - b.y())
 
+# Return a vector having the given distance along a bearing, originating at the point `p`.
+# The resulting vector is expressed in degree units, in a spherical projection
+# and is adjusted for the latitude of its origin.
 def projectBearing(p, distance, bearing):
     r = math.radians(bearing)
     d = distance * metersToDeg
