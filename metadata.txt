@@ -28,7 +28,7 @@ hasProcessingProvider=no
 # Tags are comma separated with spaces allowed
 tags=tags=magnetic, north, bearing, compass, declination, world magnetic model, route, navigation
 
-homepage=
+homepage=https://joeberkovitz.com
 category=Vector
 icon=icon.png
 # experimental flag
