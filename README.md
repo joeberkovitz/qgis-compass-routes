@@ -16,7 +16,7 @@ heading.
 Before running the command, set up your main map canvas to point at the area
 of interest. When you run the command, the following dialog will be shown:
 
-<img alt="Compass route layer dialog" src="/doc/images/CompassRoutesDialog.png" width="50%">
+<img alt="Compass route layer dialog" src="doc/images/CompassRoutesDialog.png" width="50%">
 
 The *Magnetic variation* field is defaulted to the variation in the center of
 the map canvas, but can be changed. Negative values are West variations;
@@ -27,7 +27,7 @@ The new layer is initially empty and is given the name specified in the dialog
 plus a suffix noting the variation used for labeling. Lines in the layer are
 automatically labeled in this fashion:
 
-![Route segments](/doc/images/RouteSegments.png)
+![Route segments](doc/images/RouteSegments.png)
 
 The `magnetic_var` layer property stores the variation used for the layer, so you can change
 it in the layer's Properties dialog if needed.
@@ -76,13 +76,13 @@ of the layer is always EPSG:4326 regardless of the project CRS.
 An example of a generated grid at a small scale looks like this (accepting the
 defaults for a 1 nm spacing):
 
-<img alt="Magnetic north lines" src="/doc/images/MagneticNorthLines.png" width="50%">
+<img alt="Magnetic north lines" src="doc/images/MagneticNorthLines.png" width="50%">
 
 At a larger scale, the breaking and rebreaking of lines looks like this (this uses a
 10 nm spacing with 0.1 nm max error):
 
 
-<img alt="Broken magnetic north lines" src="/doc/images/BrokenMagNorthLines.png" width="50%">
+<img alt="Broken magnetic north lines" src="doc/images/BrokenMagNorthLines.png" width="50%">
 
 ### Credits
 
