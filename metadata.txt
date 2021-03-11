@@ -22,8 +22,8 @@ repository=https://github.com/joeberkovitz/qgis-compass-routes
 # Recommended items:
 
 hasProcessingProvider=no
-# Uncomment the following line and add your changelog:
-# changelog=
+
+changelog=0.2: add percentage progress feedback to mag. north lines, default the rendering and labeling of mag north lines
 
 # Tags are comma separated with spaces allowed
 tags=magnetic, north, bearing, compass, declination, world magnetic model, route, navigation
