@@ -8,7 +8,7 @@
 name=Compass Routes
 qgisMinimumVersion=3.2
 description=This plugin creates vector layers that work with magnetic variation.
-version=0.1
+version=0.2
 author=Joe Berkovitz
 email=joseph.berkovitz@gmail.com
 about=Commands in this plugin are available under Plugins > Compass Routes:
