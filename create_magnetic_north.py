@@ -186,7 +186,7 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
             # hold onto our point list for spacing check on the next trace
             lastStartPoints = startPoints
 
-            # now advance the start point to the east, correcting for the variation angle
+            # now advance the start point longitude, correcting for the variation angle
             variation = geomag.declination(start.y(), start.x(), 0, date.today())
             (factor, nextX) = self.adjustLongForVariation(start, lineDistance, variation)
             start.setX(nextX)
@@ -202,7 +202,7 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
         return {self.PrmOutputLayer: dest_id}
 
     # Compute a factor converting longitudinal distance into degrees at a given point's latitude
-    # and also give an adjusted X coordinate moving the point a given distance.
+    # and also give an adjusted X coordinate placing the point on a new field line at that parallel distance.
     def adjustLongForVariation(self, p, distance, variation):
         east = projectBearing(p, 1, 90)
         factor = east.x() / math.cos(math.radians(variation))
