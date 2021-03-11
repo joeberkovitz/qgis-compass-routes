@@ -5,11 +5,13 @@ from datetime import *
 from qgis.core import (
     QgsPointXY, QgsPoint, QgsFeature, QgsGeometry, QgsField, QgsFields,
     QgsProject, QgsUnitTypes, QgsWkbTypes, QgsCoordinateTransform,
-    QgsLineString, QgsDistanceArea)
+    QgsLineString, QgsDistanceArea, QgsPalLayerSettings,
+    QgsLabelLineSettings, QgsVectorLayer, QgsVectorLayerSimpleLabeling)
 
 from qgis.core import (
     QgsProcessing,
     QgsProcessingAlgorithm,
+    QgsProcessingLayerPostProcessorInterface,
     QgsProcessingFeedback,
     QgsProcessingParameterBoolean,
     QgsProcessingParameterNumber,
@@ -19,7 +21,7 @@ from qgis.core import (
     QgsProcessingParameterExtent,
     QgsProcessingParameterFeatureSink)
 
-from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtCore import QVariant, QUrl
 
 from .utils import *
@@ -32,6 +34,7 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
     PrmLineDistance = 'LineDistance'
     PrmTraceInterval = 'TraceInterval'
     PrmDistanceTolerance = 'DistanceTolerance'
+    PrmLabelInterval = 'LabelInterval'
 
     # Set up this algorithm
     def initAlgorithm(self, config):
@@ -74,6 +77,22 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
                 optional=False)
         )
         self.addParameter(
+            QgsProcessingParameterNumber(
+                self.PrmDistanceTolerance,
+                tr('Maximum error in distance between lines (0=disregard)'),
+                QgsProcessingParameterNumber.Double,
+                defaultValue=0.05,
+                optional=False)
+        )
+        self.addParameter(
+            QgsProcessingParameterNumber(
+                self.PrmLabelInterval,
+                tr('Labeling interval (0=no labels)'),
+                QgsProcessingParameterNumber.Integer,
+                defaultValue=5,
+                optional=False)
+        )
+        self.addParameter(
             QgsProcessingParameterFeatureSink(
                 self.PrmOutputLayer,
                 tr('Output layer'))
@@ -89,14 +108,21 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
         units = self.parameterAsInt(parameters, self.PrmUnitsOfMeasure, context)
         measureFactor = conversionToMeters(units)
 
+        # these parameters must be visible to our StyleProcessor
+        self.labelInterval = self.parameterAsInt(parameters, self.PrmLabelInterval, context)
+
         # adjust linear units
         lineDistance *= measureFactor
         traceInterval *= measureFactor
         distanceTolerance *= measureFactor
 
+        f = QgsFields()
+        f.append(QgsField("trace", QVariant.Int))
+        f.append(QgsField("variation", QVariant.Double))
+
         # obtain our output sink
         (sink, dest_id) = self.parameterAsSink(
-            parameters, self.PrmOutputLayer, context, QgsFields(),
+            parameters, self.PrmOutputLayer, context, f,
             QgsWkbTypes.LineString, epsg4326)
 
 
@@ -158,6 +184,7 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
                         # Flush any line that is in progress
                         if len(line) >= 2:
                             feature = QgsFeature()
+                            feature.setAttributes([lineCount, variation])
                             feature.setGeometry(QgsGeometry.fromPolylineXY(line))
                             sink.addFeature(feature)
 
@@ -176,6 +203,7 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
             # Flush any accumulated points to a polyline
             if len(line) >= 2:
                 feature = QgsFeature()
+                feature.setAttributes([lineCount, variation])
                 feature.setGeometry(QgsGeometry.fromPolylineXY(line))
                 sink.addFeature(feature)
 
@@ -199,6 +227,9 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
 
         # end longitude loop
 
+        if context.willLoadLayerOnCompletion(dest_id):
+            context.layerToLoadOnCompletionDetails(dest_id).setPostProcessor(StylePostProcessor.create(self))
+
         return {self.PrmOutputLayer: dest_id}
 
     # Compute a factor converting longitudinal distance into degrees at a given point's latitude
@@ -219,4 +250,45 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
 
     def createInstance(self):
         return CreateMagneticNorthAlgorithm()
+
+class StylePostProcessor(QgsProcessingLayerPostProcessorInterface):
+    instance = None
+
+    def __init__(self, proc):
+        super(StylePostProcessor, self).__init__()
+        self.processor = proc
+
+    def postProcessLayer(self, layer, context, feedback):
+
+        if not isinstance(layer, QgsVectorLayer):
+            return
+
+        renderer = layer.renderer()
+        renderer.symbol().setColor(QColor.fromRgb(192,0,0))
+        renderer.symbol().setWidth(0.25)
+
+        label = QgsPalLayerSettings()
+        if self.processor.labelInterval > 0:
+            label.fieldName = "if(trace % {} = 0, format_number(abs(variation),1)+if(variation<0,'º W','º E'), '')".format(self.processor.labelInterval)
+            label.placement = QgsPalLayerSettings.Line
+            label.isExpression = True
+            label.minimumScale = 2000000.0
+            label.scaleVisibility = True
+
+            label.lineSettings().setLineAnchorPercent(0)
+            label.lineSettings().setAnchorType(QgsLabelLineSettings.AnchorType.Strict)
+
+            format = label.format()
+            format.buffer().setEnabled(True)
+            label.setFormat(format)
+
+            labeling = QgsVectorLayerSimpleLabeling(label)
+
+            layer.setLabeling(labeling)
+            layer.setLabelsEnabled(True)
+
+    @staticmethod
+    def create(proc) -> 'StylePostProcessor':
+        StylePostProcessor.instance = StylePostProcessor(proc)
+        return StylePostProcessor.instance
 
