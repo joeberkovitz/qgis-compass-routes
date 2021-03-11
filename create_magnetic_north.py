@@ -192,8 +192,10 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
             start.setX(nextX)
 
             lineCount += 1
-            if lineCount % 10 == 0:
-                feedback.pushInfo('Field lines added: ' + str(lineCount))
+            if lineDistance > 0:
+                feedback.setProgress(100*(start.x() - extent.xMinimum())/extent.width())
+            else:
+                feedback.setProgress(100*(extent.xMaximum() - start.x())/extent.width())
 
         # end longitude loop
 
