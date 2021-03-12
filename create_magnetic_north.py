@@ -71,14 +71,6 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterNumber(
                 self.PrmDistanceTolerance,
-                tr('Maximum error in distance between lines (zero=disregard)'),
-                QgsProcessingParameterNumber.Double,
-                defaultValue=0.05,
-                optional=False)
-        )
-        self.addParameter(
-            QgsProcessingParameterNumber(
-                self.PrmDistanceTolerance,
                 tr('Maximum error in distance between lines (0=disregard)'),
                 QgsProcessingParameterNumber.Double,
                 defaultValue=0.05,
