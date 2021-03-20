@@ -181,8 +181,6 @@ class CompassRoutes:
             text=tr(u'Create Magnetic North Lines'),
             callback=self.createMagNorthLayer,
             parent=self.iface.mainWindow())
-        self.mag_north_needs_init = True
-
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
