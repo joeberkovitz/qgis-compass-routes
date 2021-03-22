@@ -251,33 +251,12 @@ class StylePostProcessor(QgsProcessingLayerPostProcessorInterface):
         self.processor = proc
 
     def postProcessLayer(self, layer, context, feedback):
-
         if not isinstance(layer, QgsVectorLayer):
             return
 
-        renderer = layer.renderer()
-        renderer.symbol().setColor(QColor.fromRgb(192,0,0))
-        renderer.symbol().setWidth(0.25)
+        layer.setName(tr('Magnetic North'))
+        layer.loadNamedStyle(os.path.join(os.path.dirname(__file__),'styles','magnetic_north.qml'))
 
-        label = QgsPalLayerSettings()
-        if self.processor.labelInterval > 0:
-            label.fieldName = "if(trace % {} = 0, format_number(abs(variation),1)+if(variation<0,'º W','º E'), '')".format(self.processor.labelInterval)
-            label.placement = QgsPalLayerSettings.Line
-            label.isExpression = True
-            label.minimumScale = 2000000.0
-            label.scaleVisibility = True
-
-            label.lineSettings().setLineAnchorPercent(0)
-            label.lineSettings().setAnchorType(QgsLabelLineSettings.AnchorType.Strict)
-
-            format = label.format()
-            format.buffer().setEnabled(True)
-            label.setFormat(format)
-
-            labeling = QgsVectorLayerSimpleLabeling(label)
-
-            layer.setLabeling(labeling)
-            layer.setLabelsEnabled(True)
 
     @staticmethod
     def create(proc) -> 'StylePostProcessor':
