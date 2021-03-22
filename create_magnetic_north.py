@@ -34,7 +34,7 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
     PrmLineDistance = 'LineDistance'
     PrmTraceInterval = 'TraceInterval'
     PrmDistanceTolerance = 'DistanceTolerance'
-    PrmLabelInterval = 'LabelInterval'
+    PrmVariationTolerance = 'VariationTolerance'
 
     # Set up this algorithm
     def initAlgorithm(self, config):
@@ -71,17 +71,25 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterNumber(
                 self.PrmDistanceTolerance,
-                tr('Maximum error in distance between lines (0=disregard)'),
+                tr('Maximum error in distance between lines (zero=disregard)'),
                 QgsProcessingParameterNumber.Double,
                 defaultValue=0.05,
                 optional=False)
         )
         self.addParameter(
             QgsProcessingParameterNumber(
-                self.PrmLabelInterval,
-                tr('Labeling interval (0=no labels)'),
-                QgsProcessingParameterNumber.Integer,
-                defaultValue=5,
+                self.PrmDistanceTolerance,
+                tr('Maximum distance error between lines (0=disregard)'),
+                QgsProcessingParameterNumber.Double,
+                defaultValue=0.05,
+                optional=False)
+        )
+        self.addParameter(
+            QgsProcessingParameterNumber(
+                self.PrmVariationTolerance,
+                tr('Maximum variation error within a line (0=disregard)'),
+                QgsProcessingParameterNumber.Double,
+                defaultValue=0.05,
                 optional=False)
         )
         self.addParameter(
@@ -97,11 +105,9 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
         lineDistance = self.parameterAsDouble(parameters, self.PrmLineDistance, context)
         traceInterval = self.parameterAsDouble(parameters, self.PrmTraceInterval, context)
         distanceTolerance = self.parameterAsDouble(parameters, self.PrmDistanceTolerance, context)
+        variationTolerance = self.parameterAsDouble(parameters, self.PrmVariationTolerance, context)
         units = self.parameterAsInt(parameters, self.PrmUnitsOfMeasure, context)
         measureFactor = conversionToMeters(units)
-
-        # these parameters must be visible to our StyleProcessor
-        self.labelInterval = self.parameterAsInt(parameters, self.PrmLabelInterval, context)
 
         # adjust linear units
         lineDistance *= measureFactor
@@ -157,6 +163,8 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
 
                 # get the variation at this point
                 variation = geomag.declination(p1.y(), p1.x(), 0, date.today())
+                if t == 0:
+                    lastVariation = variation  # record last used variation in this polyline for error computation
 
                 # determine a 1-meter vector in the direction of magnetic north
                 # and scale this to find a vector taking us from p1 to the next latitude step
@@ -186,6 +194,17 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
                         if p2.x() >= extent.xMinimum() and p2.x() <= extent.xMaximum():
                             line.append(p2)
                             empty = False
+
+                # if we didn't do that, and variation error exceeds tolerance, then start a new line in the same spot
+                elif variationTolerance > 0 and abs(variation - lastVariation) > variationTolerance:
+                    # Flush any line that is in progress and start a new line in the same spot
+                    if len(line) >= 2:
+                        feature = QgsFeature()
+                        feature.setAttributes([lineCount, variation])
+                        feature.setGeometry(QgsGeometry.fromPolylineXY(line))
+                        sink.addFeature(feature)
+                    line = [p2]
+                    lastVariation = variation
 
                 startPoints.append(p2)
                 p1 = p2
