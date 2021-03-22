@@ -143,7 +143,7 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
         lastStartPoints = []
 
         # Our major (longitude) loop starts here
-        while True:
+        while not feedback.isCanceled():
             # Initialize our line at the start
             empty = True
             line = []
@@ -159,6 +159,9 @@ class CreateMagneticNorthAlgorithm(QgsProcessingAlgorithm):
             # restarting a new line whenever the horizontal step gets out of whack due to latitude change.
 
             for t in range(0, numTraces + 1):
+                if feedback.isCanceled():
+                    break
+
                 y = extent.yMinimum() + (t * traceY)
 
                 # get the variation at this point
