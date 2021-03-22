@@ -21,7 +21,7 @@
  *                                                                         *
  ***************************************************************************/
 """
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QDate, QDateTime
 from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWidgets import QAction
 
@@ -38,7 +38,7 @@ import math
 
 # Initialize Qt resources from file resources.py
 from .resources import *
-from .utils import tr
+from .utils import *
 
 # Import the code for the dialog
 from.compass_routes_provider import CompassRoutesProvider
@@ -205,35 +205,53 @@ class CompassRoutes:
         processing.execAlgorithmDialog('compassroutes:createmagneticnorth', {})
 
     # Custom expression function to return geomagnetic variation at lat/long coordinates
-    @qgsfunction(args=2, group='Compass Routes', register=False)
+    @qgsfunction(args=-1, group='Compass Routes', register=False)
     def magnetic_variation(values, feature, parent):
         """Obtains the magnetic variation at some given coordinates.
 
-        <br><br>magnetic_variation(lat, long)
+        <br><br>magnetic_variation(lat, long, [altitude [, date]])
 
         <br><br>lat -- latitude as a number in signed degrees
         <br>long -- longitude as a number in signed degrees
+        <br>altitude -- optional altitude in meters; defaults to zero
+        <br>date -- optional date or datetime for variation; defaults to today's date
         """
 
         latitude = values[0]
         longitude = values[1]
-        return geomag.declination(latitude, longitude, 0, date.today())
+        if len(values) >= 3:
+            z = values[2]
+        else:
+            z = 0
+        if len(values) >= 4:
+            if isinstance(values[3], QDate):
+                dt = values[3].toPyDate()
+            else:
+                dt = values[3].toPyDateTime().date()
+        else:
+            dt = date.today()
+        return geomag.declination(latitude, longitude, z * metersToFeet, dt)
 
     # Custom expression function to convert a true bearing to a magnetic bearing at the given coordinates
-    @qgsfunction(args=3, group='Compass Routes', register=False)
+    @qgsfunction(args=-1, group='Compass Routes', register=False)
     def to_magnetic(values, feature, parent):
         """Converts a true bearing at some given coordinates to a magnetic bearing in the range 0-360.
 
-        <br><br>to_magnetic(bearing, lat, long)
+        <br><br>to_magnetic(bearing, lat, long, [altitude])
 
         <br><br>bearing -- a true bearing in degrees
         <br>lat -- latitude as a number in signed degrees
         <br>long -- longitude as a number in signed degrees
+        <br>altitude -- optional altitude in meters; defaults to zero
         """
         bearing = values[0]
         latitude = values[1]
         longitude = values[2]
-        variation = geomag.declination(latitude, longitude, 0, date.today())
+        if len(values) >= 4:
+            z = values[3]
+        else:
+            z = 0
+        variation = geomag.declination(latitude, longitude, z * metersToFeet, date.today())
         azimuth = bearing - variation
         while azimuth < 0:
             azimuth += 360

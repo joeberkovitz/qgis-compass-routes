@@ -29,6 +29,7 @@ def conversionToMeters(units):
 epsg4326 = QgsCoordinateReferenceSystem("EPSG:4326")
 
 nmToMeters = QgsUnitTypes.fromUnitToUnitFactor(QgsUnitTypes.DistanceNauticalMiles, QgsUnitTypes.DistanceMeters)
+metersToFeet = QgsUnitTypes.fromUnitToUnitFactor(QgsUnitTypes.DistanceMeters, QgsUnitTypes.DistanceFeet)
 degToMeters = nmToMeters * 60
 metersToDeg = 1 / degToMeters
 
