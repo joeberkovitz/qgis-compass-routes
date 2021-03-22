@@ -11,7 +11,7 @@ It contains both menu commands (available under **Plugins > Compass Routes**) an
 
 This menu command adds a new Line layer with memory storage, whose lines
 render as arrows that are automatically labeled with distance and magnetic
-heading. 
+heading.
 
 The new layer, named *Routes*, is initially empty. Lines in the layer are
 automatically labeled in this fashion:
@@ -19,13 +19,15 @@ automatically labeled in this fashion:
 ![Route segments](doc/images/RouteSegments.png)
 
 The magnetic variation for each label is dynamically computed from a geomagnetic model,
-using the current date.
+using the current date.  Altitude is ignored; magnetic variation is computed at sea level.
 
 ### Create Magnetic North Lines
 
 This processing script adds a vector layer containing magnetic north lines
 within a given extent. Lines are spaced by a given distance and are broken and
 redrawn to preserve this spacing within an error tolerance.
+
+Altitude is ignored; the variation is computed at sea level.
 
 Parameters to the script are as follows:
 
