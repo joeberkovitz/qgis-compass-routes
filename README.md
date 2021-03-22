@@ -1,11 +1,16 @@
 ---
 permalink: index.html
 ---
-## qgis-compass-routes
+# qgis-compass-routes
 
-This plugin creates vector layers that work with magnetic variation.
+This plugin creates vector layers that use magnetic variation. It also adds a couple of
+custom expression functions that provide access to the underlying geomagnetic model
+used by the plugin.
 
-It contains both menu commands (available under **Plugins > Compass Routes**) and Processing plugins.
+All actions are available as menu commands (available under **Plugins > Compass Routes**) and
+as Processing scripts.
+
+## Processing scripts
 
 ### Create Compass Route Layer
 
@@ -75,7 +80,31 @@ is labeled with its variation for clarity):
 
 <img alt="Broken magnetic north lines" src="doc/images/BrokenMagNorthLines.png" width="50%">
 
-### Credits
+## Expression Functions
+
+These functions may be used for dynamic computation of magnetic variation in QGIS expressions.
+
+### `magnetic_north(lat, long [,altitude [,date]])`
+
+Obtains the magnetic variation at some given coordinates.
+
+* `lat` -- latitude as a number in signed degrees
+* `long` -- longitude as a number in signed degrees
+* `altitude` -- optional altitude in meters; defaults to zero
+* `date` -- a date or time at which the variation should be computed
+ 
+### `to_magnetic(bearing, lat, long [,altitude])`
+
+Converts a true bearing at some given coordinates to a magnetic bearing in the range 0-360,
+for the current date.
+
+* `bearing` -- a true bearing in degrees
+* `lat` -- latitude as a number in signed degrees
+* `long` -- longitude as a number in signed degrees
+* `altitude` -- optional altitude in meters; defaults to zero
+
+
+## Credits
 
 For dynamic computation of magnetic declination, uses the `geomag` package by Christopher Weiss - see https://github.com/cmweiss/geomag
 
