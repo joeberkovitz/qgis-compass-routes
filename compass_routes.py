@@ -27,10 +27,10 @@ from qgis.PyQt.QtWidgets import QAction
 
 from qgis.core import (
     Qgis, QgsApplication, QgsCoordinateTransform, QgsCoordinateReferenceSystem,
-    QgsUnitTypes, QgsWkbTypes, QgsGeometry, QgsFields, QgsField,
-    QgsProject, QgsVectorLayer, QgsFeature, QgsPoint, QgsPointXY, QgsLineString, QgsDistanceArea,
-    QgsArrowSymbolLayer, QgsLineSymbol, QgsSingleSymbolRenderer,
-    QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, QgsSettings,QgsExpressionContextUtils)
+    QgsExpression,
+)
+
+from qgis.core import qgsfunction
 
 from . import geomag
 from datetime import *
@@ -41,7 +41,6 @@ from .resources import *
 from .utils import tr
 
 # Import the code for the dialog
-from .create_compass_routes_layer_dialog import CreateCompassRoutesLayerDialog
 from.compass_routes_provider import CompassRoutesProvider
 
 import os.path
@@ -89,6 +88,10 @@ class CompassRoutes:
         self.route_needs_init = None
 
         QgsApplication.processingRegistry().addProvider(self.provider)
+
+        # Add custom functions to compute the magnetic variation at a point, or for a line
+        QgsExpression.registerFunction(self.magnetic_variation)
+        QgsExpression.registerFunction(self.to_magnetic)
 
     def add_action(
         self,
@@ -192,102 +195,48 @@ class CompassRoutes:
 
         QgsApplication.processingRegistry().removeProvider(self.provider)
 
+        QgsExpression.unregisterFunction('magnetic_variation')
+        QgsExpression.unregisterFunction('to_magnetic')
+
     def createRouteLayer(self):
-        """Run method that performs all the real work"""
-
-        # Create the dialog with elements (after translation) and keep reference
-        # Only create GUI ONCE in callback, so that it will only load when the plugin is started
-        if self.route_needs_init == True:
-            self.route_needs_init = False
-            self.routeDialog = CreateCompassRoutesLayerDialog()
-            self.routeDialog.addLayerButton.clicked.connect(self.doCreateRouteLayer)
-            self.routeDialog.calculateButton.clicked.connect(self.calcRouteDeclination)
-
-        # always default declination on startup
-        self.calcRouteDeclination()
-
-        # show the dialog
-        self.routeDialog.show()
-        # Run the dialog event loop
-        result = self.routeDialog.exec_()
-
-        # do nothing here since either we added the layer, or we got cancelled
+        processing.execAlgorithmDialog('compassroutes:createroutelayer', {})
 
     def createMagNorthLayer(self):
         processing.execAlgorithmDialog('compassroutes:createmagneticnorth', {})
 
-    def calcRouteDeclination(self):
-        self.routeDialog.variationBox.setValue(self.calculateDeclination())
+    # Custom expression function to return geomagnetic variation at lat/long coordinates
+    @qgsfunction(args=2, group='Compass Routes', register=False)
+    def magnetic_variation(values, feature, parent):
+        """Obtains the magnetic variation at some given coordinates.
 
-    def calculateDeclination(self):
-        xform = QgsCoordinateTransform(self.iface.mapCanvas().mapSettings().destinationCrs(),
-            QgsCoordinateReferenceSystem('EPSG:4326'),
-            QgsProject.instance())
-        center = xform.transform(self.iface.mapCanvas().center())
-        return round(geomag.declination(center.y(), center.x(), 0, date.today()))
+        <br><br>magnetic_variation(lat, long)
 
-    def makeLayerName(self, name, variation):
-        degrees = str(abs(variation)) + 'º' + ('W' if variation < 0 else 'E')
-        return name + " (var. " + degrees + ")"
+        <br><br>lat -- latitude as a number in signed degrees
+        <br>long -- longitude as a number in signed degrees
+        """
 
-    def doCreateRouteLayer(self):
-        # Create a temporary layer with appropriate symbology and labeling that will
-        # automatically label each line with distance and heading.
+        latitude = values[0]
+        longitude = values[1]
+        return geomag.declination(latitude, longitude, 0, date.today())
 
-        variation = self.routeDialog.variationBox.value()
-        canvasCrs = self.canvas.mapSettings().destinationCrs()
-        fields = QgsFields()   # there are no fields.
+    # Custom expression function to convert a true bearing to a magnetic bearing at the given coordinates
+    @qgsfunction(args=3, group='Compass Routes', register=False)
+    def to_magnetic(values, feature, parent):
+        """Converts a true bearing at some given coordinates to a magnetic bearing in the range 0-360.
 
-        layerName = self.makeLayerName(self.routeDialog.layerEdit.text(), variation)
-        layer = QgsVectorLayer("LineString?crs={}".format(canvasCrs.authid()), layerName, "memory")
-        dp = layer.dataProvider()
-        dp.addAttributes(fields)
-        layer.updateFields()
+        <br><br>to_magnetic(bearing, lat, long)
 
-        # Set up the layer with an expression label that does what we want
-        label = QgsPalLayerSettings()
-        label.fieldName = (
-            "concat(format_number($length,2),' @ ',"
-            "lpad(format_number("
-            "round(degrees(azimuth(start_point($geometry), end_point($geometry)))+360-@magnetic_var)%360,0),3,'0'),"
-            "' M')")
-        try:
-            label.placement = QgsPalLayerSettings.Line
-        except Exception:
-            label.placement = QgsPalLayerSettings.AboveLine
-        label.dist = 2.5
-        label.isExpression = True
-        label.overrunDistance = 1000
-
-        # configure the text, background and symbology to a reasonable default
-        format = label.format()
-        format.setSizeUnit(QgsUnitTypes.RenderUnit.RenderMillimeters)
-        format.setColor(QColor.fromRgb(0))
-        format.setNamedStyle('Bold')
-        format.setSize(7)
-        format.background().setFillColor(QColor.fromRgba(0xCCFFFFFF))
-        format.background().setEnabled(True)
-
-        label.setFormat(format)
-        labeling = QgsVectorLayerSimpleLabeling(label)
-        layer.setLabeling(labeling)
-        layer.setLabelsEnabled(True)
-
-        arrow = QgsArrowSymbolLayer()
-        arrow.setArrowStartWidth(1)
-        arrow.setArrowWidth(1)
-        arrow.setHeadThickness(5)
-        arrow.setHeadLength(5)
-        arrow.setIsCurved(False)
-        arrow.setIsRepeated(False)
-        arrow.setColor(QColor.fromRgba(0xCC4daf4a))
-
-        layer.renderer().symbol().changeSymbolLayer(0,arrow)
-
-        QgsExpressionContextUtils.setLayerVariable(layer,'magnetic_var',str(variation))
-
-        layer.updateExtents()
-        QgsProject.instance().addMapLayer(layer)
-
-        self.routeDialog.close()  
-
+        <br><br>bearing -- a true bearing in degrees
+        <br>lat -- latitude as a number in signed degrees
+        <br>long -- longitude as a number in signed degrees
+        """
+        bearing = values[0]
+        latitude = values[1]
+        longitude = values[2]
+        variation = geomag.declination(latitude, longitude, 0, date.today())
+        azimuth = bearing - variation
+        while azimuth < 0:
+            azimuth += 360
+        while azimuth >= 360:
+            azimuth -= 360
+        return azimuth
