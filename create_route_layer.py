@@ -75,6 +75,7 @@ class StylePostProcessor(QgsProcessingLayerPostProcessorInterface):
 
         layer.setName(tr('Routes'))
         layer.loadNamedStyle(os.path.join(os.path.dirname(__file__),'styles','routes.qml'))
+        layer.startEditing()
 
     @staticmethod
     def create(proc) -> 'StylePostProcessor':
