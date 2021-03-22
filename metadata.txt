@@ -14,6 +14,7 @@ email=joseph.berkovitz@gmail.com
 about=Commands in this plugin are available under Plugins > Compass Routes:
     "Create Compass Route Layer": adds a new LineString layer with memory storage rendering as arrows that are automatically labeled with distance and magnetic bearing. The variation for each label is dynamically determined.
     "Create Magnetic North Lines": processing script that adds a vector layer containing magnetic north lines within a given extent. Lines are spaced by a given distance, and are broken and re-spaced to preserve this distance within an error tolerance.
+    For full documentation please see the project homepage.
 
 tracker=https://github.com/joeberkovitz/qgis-compass-routes/issues
 repository=https://github.com/joeberkovitz/qgis-compass-routes
@@ -23,7 +24,14 @@ repository=https://github.com/joeberkovitz/qgis-compass-routes
 
 hasProcessingProvider=no
 
-changelog=0.2.1: add percentage progress feedback to mag. north lines, default the rendering and labeling of mag north lines
+changelog=
+    0.2.1:
+       add percentage progress feedback to mag. north lines, default the rendering and labeling of mag north lines
+    0.3:
+       add custom expression functions for mag. variation
+       compute variation dynamically based on geomag model for each line--no more fixed variation
+       use tooltips instead of line labels
+       convert layer creation to a Processing script
 
 # Tags are comma separated with spaces allowed
 tags=magnetic, north, bearing, compass, declination, world magnetic model, route, navigation
