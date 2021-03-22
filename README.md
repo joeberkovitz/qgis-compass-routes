@@ -13,31 +13,19 @@ This menu command adds a new Line layer with memory storage, whose lines
 render as arrows that are automatically labeled with distance and magnetic
 heading. 
 
-Before running the command, set up your main map canvas to point at the area
-of interest. When you run the command, the following dialog will be shown:
-
-<img alt="Compass route layer dialog" src="doc/images/CompassRoutesDialog.png" width="50%">
-
-The *Magnetic variation* field is defaulted to the variation in the center of
-the map canvas, but can be changed. Negative values are West variations;
-positive values are East. The *Recalculate* button will recalculate the
-variation if the map canvas is adjusted.
-
-The new layer is initially empty and is given the name specified in the dialog
-plus a suffix noting the variation used for labeling. Lines in the layer are
+The new layer, named *Routes*, is initially empty. Lines in the layer are
 automatically labeled in this fashion:
 
 ![Route segments](doc/images/RouteSegments.png)
 
-The `magnetic_var` layer property stores the variation used for the layer, so you can change
-it in the layer's Properties dialog if needed.
+The magnetic variation for each label is dynamically computed from a geomagnetic model,
+using the current date.
 
 ### Create Magnetic North Lines
 
 This processing script adds a vector layer containing magnetic north lines
-within a given extent, optionally labeled with their variation. Lines are
-spaced by a given distance and are broken and redrawn to preserve this spacing
-within an error tolerance.
+within a given extent. Lines are spaced by a given distance and are broken and
+redrawn to preserve this spacing within an error tolerance.
 
 Parameters to the script are as follows:
 
@@ -58,7 +46,7 @@ Each line is created by repeatedly advancing at roughly this interval along
 the field, yielding a number of points. These are then connected to form an
 approximation to the field line.
 
-*Maximum error in distance between lines* specifies the largest error in line
+*Maximum distance error between lines* specifies the largest error in line
 spacing that will be tolerated before a traced line is ended and a new one
 begun at the proper distance from the previous one. (Note that lines are
 traced from south to north, so the initial spacing is correct on the south
@@ -66,9 +54,11 @@ side of the extent.) Providing zero for this parameter, forces lines to be
 generated continuously with no breaks and with unpredictable spacing on the
 north of the extent.
 
-*Labeling interval* specifies the interval at which lines will be labeled. The
-default value of 5 indicates that every fifth traced field line gets a label.
-1 implies every line is labeled; 0 disables labeling altogether.
+*Maximum variation error within a lines* specifies the largest error in magnetic
+variation that will be tolerated before a traced line is ended and a new one
+begun at the current point. This does not create a visual break, but does
+result in a new line object whose variation tool tip (or label, if desired)
+will remain accurate to within the given tolerance.
 
 *Output layer* is a vector layer in which the results will be placed. The CRS
 of the layer is always EPSG:4326 regardless of the project CRS.
@@ -78,9 +68,8 @@ defaults for a 1 nm spacing):
 
 <img alt="Magnetic north lines" src="doc/images/MagneticNorthLines.png" width="50%">
 
-At a larger scale, the breaking and rebreaking of lines looks like this (this uses a
-10 nm spacing with 0.1 nm max error):
-
+At a larger scale, the breaking of lines to preserve distance spacing looks like this (each line
+is labeled with its variation for clarity):
 
 <img alt="Broken magnetic north lines" src="doc/images/BrokenMagNorthLines.png" width="50%">
 
