@@ -41,9 +41,14 @@ class CreateRouteLayerAlgorithm(QgsProcessingAlgorithm):
 
     def processAlgorithm(self, parameters, context, feedback):
         # obtain our output sink
+        fields = QgsFields()
+        fields.append(QgsField('label', QVariant.String,'', 64))
+
         (sink, dest_id) = self.parameterAsSink(
-            parameters, self.PrmOutputLayer, context, QgsFields(),
+            parameters, self.PrmOutputLayer, context, fields,
             QgsWkbTypes.LineString, epsg4326)
+
+        sink
 
         if context.willLoadLayerOnCompletion(dest_id):
             context.layerToLoadOnCompletionDetails(dest_id).setPostProcessor(StylePostProcessor.create(self))
