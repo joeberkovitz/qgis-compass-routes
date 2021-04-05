@@ -72,7 +72,7 @@
   </renderer-v2>
   <labeling type="simple">
     <settings calloutType="simple">
-      <text-style blendMode="0" fontStrikeout="0" multilineHeight="1" namedStyle="Bold" fontKerning="1" fontUnderline="0" fontWeight="75" textOrientation="horizontal" useSubstitutions="0" fontFamily=".AppleSystemUIFont" fontSizeMapUnitScale="3x:0,0,0,0,0,0" fontSizeUnit="MM" fieldName="label_magnetic" fontSize="7" allowHtml="0" isExpression="0" textColor="0,0,0,255" fontWordSpacing="0" fontLetterSpacing="0" previewBkgrdColor="255,255,255,255" textOpacity="1" fontItalic="0" capitalization="0">
+      <text-style blendMode="0" fontStrikeout="0" multilineHeight="1" namedStyle="Bold" fontKerning="1" fontUnderline="0" fontWeight="75" textOrientation="horizontal" useSubstitutions="0" fontFamily=".AppleSystemUIFont" fontSizeMapUnitScale="3x:0,0,0,0,0,0" fontSizeUnit="MM" fieldName="if(label,label,label_magnetic)" fontSize="7" allowHtml="0" isExpression="1" textColor="0,0,0,255" fontWordSpacing="0" fontLetterSpacing="0" previewBkgrdColor="255,255,255,255" textOpacity="1" fontItalic="0" capitalization="0">
         <text-buffer bufferNoFill="1" bufferSizeUnits="MM" bufferColor="255,255,255,255" bufferDraw="1" bufferSizeMapUnitScale="3x:0,0,0,0,0,0" bufferOpacity="1" bufferJoinStyle="128" bufferBlendMode="0" bufferSize="1"/>
         <text-mask maskEnabled="0" maskedSymbolLayers="" maskSize="1.5" maskSizeMapUnitScale="3x:0,0,0,0,0,0" maskSizeUnits="MM" maskType="0" maskJoinStyle="128" maskOpacity="1"/>
         <background shapeRotation="0" shapeOffsetMapUnitScale="3x:0,0,0,0,0,0" shapeSizeUnit="MM" shapeSizeY="0" shapeBorderWidthUnit="MM" shapeSizeType="0" shapeFillColor="255,255,255,204" shapeSizeX="0" shapeRotationType="0" shapeOffsetY="0" shapeOffsetX="0" shapeType="0" shapeRadiiY="0" shapeBorderWidth="0" shapeBorderWidthMapUnitScale="3x:0,0,0,0,0,0" shapeJoinStyle="64" shapeOffsetUnit="MM" shapeRadiiMapUnitScale="3x:0,0,0,0,0,0" shapeSizeMapUnitScale="3x:0,0,0,0,0,0" shapeSVGFile="" shapeBlendMode="0" shapeRadiiX="0" shapeDraw="0" shapeBorderColor="128,128,128,255" shapeOpacity="1" shapeRadiiUnit="MM">
@@ -244,8 +244,8 @@
   <expressionfields>
     <field type="2" name="bearing_magnetic" length="10" precision="0" subType="0" expression="round(to_magnetic(degrees(azimuth(start_point($geometry), end_point($geometry))),y($geometry),x($geometry)))" typeName="integer" comment=""/>
     <field type="2" name="bearing_true" length="10" precision="0" subType="0" expression="round(degrees(azimuth(start_point($geometry), end_point($geometry))))" typeName="integer" comment=""/>
-    <field type="10" name="label_magnetic" length="0" precision="0" subType="0" expression="if(label,label,concat(format_number($length,2),' @ ',lpad(to_string(bearing_magnetic),3,'0'),' M'))" typeName="string" comment=""/>
-    <field type="10" name="label_true" length="0" precision="0" subType="0" expression="if(label,label,concat(format_number($length,2),' @ ',lpad(to_string(bearing_true),3,'0'),' T'))" typeName="string" comment=""/>
+    <field type="10" name="label_magnetic" length="0" precision="0" subType="0" expression="concat(format_number($length,2),' @ ',lpad(to_string(bearing_magnetic),3,'0'),' M')" typeName="string" comment=""/>
+    <field type="10" name="label_true" length="0" precision="0" subType="0" expression="concat(format_number($length,2),' @ ',lpad(to_string(bearing_true),3,'0'),' T')" typeName="string" comment=""/>
   </expressionfields>
   <editform tolerant="1"></editform>
   <editforminit/>
@@ -268,11 +268,8 @@ def my_form_open(dialog, layer, feature):
 	geom = feature.geometry()
 	control = dialog.findChild(QWidget, "MyLineEdit")
 ]]></editforminitcode>
-  <featformsuppress>0</featformsuppress>
-  <editorlayout>tablayout</editorlayout>
-  <attributeEditorForm>
-    <attributeEditorField name="label" index="0" showLabel="1"/>
-  </attributeEditorForm>
+  <featformsuppress>1</featformsuppress>
+  <editorlayout>generatedlayout</editorlayout>
   <editable>
     <field editable="0" name="bearing_magnetic"/>
     <field editable="0" name="bearing_true"/>
