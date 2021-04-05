@@ -12,7 +12,7 @@ as Processing scripts.
 
 ## Processing scripts
 
-### Create Compass Route Layer
+![Route segments](svg/create_route_layer.svg) **Create Compass Route Layer**
 
 This menu command adds a new Line layer with memory storage, whose lines
 render as arrows that are automatically labeled with distance and magnetic
@@ -21,10 +21,26 @@ heading.
 The new layer, named *Routes*, is initially empty. Lines in the layer are
 automatically labeled in this fashion:
 
-![Route segments](doc/images/RouteSegments.png)
+<img alt="Route segments" src="doc/images/RouteSegments.png" width="50%">
 
 The magnetic variation for each label is dynamically computed from a geomagnetic model,
 using the current date.  Altitude is ignored; magnetic variation is computed at sea level.
+
+Note that you must create only one line per feature. Multi-lines with multiple
+segments are not labeled nicely, and the label reflects the total length and
+bearing of the multi-line, rather than of each segment.
+
+An explicit `label` attribute is created for each feature, normally left blank. If set,
+this custom text will replace the automatically computed label:
+
+<img alt="Route segments" src="doc/images/CustomRouteLabel.png" width="50%">
+
+Hovering over a line always shows its length and magnetic/true bearings
+regardless of any custom label.
+
+The following virtual fields are available for each feature in the layer:
+- `bearing_true` and `bearing_magnetic` are the feature bearings in degrees for true and magnetic respectively.
+- `label_true` and `label_magnetic` are the default labels incorporating distance and bearing, for true and magnetic respectively.
 
 ### Create Magnetic North Lines
 
