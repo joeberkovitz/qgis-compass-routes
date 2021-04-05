@@ -287,6 +287,9 @@ def my_form_open(dialog, layer, feature):
   <dataDefinedFieldProperties/>
   <widgets/>
   <previewExpression>"label_true"</previewExpression>
-  <mapTip></mapTip>
+  <mapTip>&lt;div style="font-size: 10px; width: 125px;">
+[% label_magnetic %] ([% lpad(to_string(bearing_true),3,'0') %] T)&lt;br>
+[% label %]
+&lt;/div></mapTip>
   <layerGeometryType>1</layerGeometryType>
 </qgis>
