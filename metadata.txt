@@ -30,7 +30,9 @@ changelog=
     0.3:
        add custom expression functions for mag. variation
        compute variation dynamically based on geomag model for each line--no more fixed variation
-       use tooltips instead of line labels
+       use tooltips to supplement info in line labels
+       add custom-label attribute
+       add virtual fields to simplify definition of labels
        convert layer creation to a Processing script
 
 # Tags are comma separated with spaces allowed
