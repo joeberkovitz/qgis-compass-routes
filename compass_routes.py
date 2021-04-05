@@ -64,6 +64,9 @@ class CompassRoutes:
 
         self.provider = CompassRoutesProvider()
 
+        self.toolbar = self.iface.addToolBar('Compass Routes Toolbar')
+        self.toolbar.setObjectName('CompassRoutesToolbar')
+
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
 
@@ -156,7 +159,7 @@ class CompassRoutes:
 
         if add_to_toolbar:
             # Adds plugin icon to Plugins toolbar
-            self.iface.addToolBarIcon(action)
+            self.toolbar.addAction(action)
 
         if add_to_menu:
             self.iface.addPluginToMenu(
@@ -173,14 +176,14 @@ class CompassRoutes:
         icon_path = ':/plugins/compass_routes/icon.png'
 
         self.add_action(
-            icon_path,
+            os.path.join(self.plugin_dir, 'svg/create_route_layer.svg'),
             text=tr(u'Create Compass Route Layer'),
             callback=self.createRouteLayer,
             parent=self.iface.mainWindow())
         self.route_needs_init = True
 
         self.add_action(
-            icon_path,
+            os.path.join(self.plugin_dir, 'svg/create_magnetic_north.svg'),
             text=tr(u'Create Magnetic North Lines'),
             callback=self.createMagNorthLayer,
             parent=self.iface.mainWindow())
