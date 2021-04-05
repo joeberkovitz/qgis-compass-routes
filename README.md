@@ -73,15 +73,16 @@ approximation to the field line.
 spacing that will be tolerated before a traced line is ended and a new one
 begun at the proper distance from the previous one. (Note that lines are
 traced from south to north, so the initial spacing is correct on the south
-side of the extent.) Providing zero for this parameter, forces lines to be
-generated continuously with no breaks and with unpredictable spacing on the
-north of the extent.
+side of the extent.) Provide zero for this parameter to force lines to be
+generated continuously with no breaks, but with unpredictable spacing on the
+north of the extent. This is useful for visualizing the field over large areas.
 
-*Maximum variation error within a lines* specifies the largest error in magnetic
+*Maximum variation error within lines* specifies the largest error in magnetic
 variation that will be tolerated before a traced line is ended and a new one
 begun at the current point. This does not create a visual break, but does
 result in a new line object whose variation tool tip (or label, if desired)
-will remain accurate to within the given tolerance.
+will remain accurate to within the given tolerance. Provide a zero value to
+disregard variation changes within a line.
 
 *Output layer* is a vector layer in which the results will be placed. The CRS
 of the layer is always EPSG:4326 regardless of the project CRS.
