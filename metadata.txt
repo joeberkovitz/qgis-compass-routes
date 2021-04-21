@@ -34,6 +34,8 @@ changelog=
        add custom-label attribute
        add virtual fields to simplify definition of labels
        convert layer creation to a Processing script
+    0.3.1
+       fix broken azimuth calculation
 
 # Tags are comma separated with spaces allowed
 tags=magnetic, north, bearing, compass, declination, world magnetic model, route, navigation
